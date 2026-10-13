@@ -35,6 +35,7 @@ function parseRoute() {
   if (p[0] === 'usuarios') return { name: 'usuarios' };
   if (p[0] === 'consumo') return { name: 'consumo' };
   if (p[0] === 'catalogo' && p[1]) return { name: 'catalogo', venueId: Number(p[1]) };
+  if (p[0] === 'repertorio' && p[1]) return { name: 'repertorio', venueId: Number(p[1]) };
   return { name: 'inicio' };
 }
 window.addEventListener('hashchange', () => { route = parseRoute(); render(); });
@@ -65,7 +66,8 @@ async function render() {
   if (route.name === 'sala') return renderRoom();
   const view = route.name === 'usuarios' && can('admin_sede') ? renderUsers
     : route.name === 'consumo' && can('admin_sede') ? renderUsage
-      : route.name === 'catalogo' ? renderCatalog : renderHome;
+      : route.name === 'catalogo' ? renderCatalog
+        : route.name === 'repertorio' && can('admin_sede') ? renderRepertoire : renderHome;
   try { await view(); } catch (e) {
     if (e.status === 401) { user = null; return renderLogin(); }
     mount(`<p class="aviso error" style="margin-top:20px">${esc(e.message)} <a href="#/">Volver</a></p>`);
@@ -99,6 +101,7 @@ async function renderHome() {
     <div class="sedes">${overview.venues.map((v) => `<section class="sede-card">
       <header><h2>${esc(v.name)}</h2>
         <span class="fila-acc">
+          <a class="btn chico" href="#/repertorio/${v.id}">Repertorio</a>
           <a class="btn chico" href="#/catalogo/${v.id}">Catálogo autorizado</a>
           ${can('admin_sede') ? `<button class="btn chico" data-nueva-sala="${v.id}">Agregar sala</button><button class="btn chico" data-editar-sede="${v.id}">Editar sede</button>` : ''}
         </span></header>
@@ -291,14 +294,15 @@ async function tabFallback(base) {
       <td class="acc">${edit ? `<button class="btn chico peligro" data-del="${i.id}">Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="vacio">Sin canciones de respaldo: con la fila vacía la pantalla queda en silencio.</p>'}
     </section>
     ${edit ? `<section class="panel"><h3>Agregar al respaldo</h3>
-      <form id="buscar" class="fila-acc"><input class="entrada" name="q" placeholder="Busca en ${esc(R.room.providerLabel)}" style="max-width:360px"><button class="btn">Buscar</button></form>
-      ${R.room.provider === 'youtube' ? '<p class="ayuda" style="margin-top:6px">Cada búsqueda gasta 100 unidades de la cuota diaria.</p>' : ''}
+      <form id="buscar" class="fila-acc"><input class="entrada" name="q" placeholder="Busca en ${esc(R.room.providerLabel)}" style="max-width:360px"><button class="btn">Buscar</button>
+        ${R.room.provider === 'youtube' ? '<label class="casilla" style="min-height:auto"><input type="checkbox" name="todo"><span>En todo YouTube (gasta 100 unidades)</span></label>' : ''}</form>
+      ${R.room.provider === 'youtube' ? '<p class="ayuda" style="margin-top:6px">Sin la casilla busca en el repertorio del bar, que no gasta cuota.</p>' : ''}
       <div id="res"></div></section>` : ''}`;
   v.querySelectorAll('[data-del]').forEach((b) => { b.onclick = async () => { if (await act(() => api('DELETE', `${base}/fallback/${b.dataset.del}`), 'Quitada del respaldo')) tabFallback(base); }; });
   if ($('#buscar')) $('#buscar').onsubmit = async (ev) => {
     ev.preventDefault();
     try {
-      const { items: found } = await api('GET', `${base}/search?q=${encodeURIComponent(ev.target.q.value)}`);
+      const { items: found } = await api('GET', `${base}/search?q=${encodeURIComponent(ev.target.q.value)}${ev.target.todo?.checked ? '&scope=youtube' : ''}`);
       $('#res').innerHTML = found.length ? `<table style="margin-top:10px"><tbody>${found.map((i) => `<tr><td>${esc(i.title)}<br><span class="tenue">${esc(i.channel || '')} · ${dur(i.durationSec)}</span></td>
         <td class="acc"><button class="btn chico principal" data-add="${esc(i.mediaId)}">Agregar</button></td></tr>`).join('')}</tbody></table>` : '<p class="vacio">Sin resultados.</p>';
       $('#res').querySelectorAll('[data-add]').forEach((b) => { b.onclick = async () => { if (await act(() => api('POST', `${base}/fallback`, { mediaId: b.dataset.add }), 'Agregada al respaldo')) tabFallback(base); }; });
@@ -392,6 +396,41 @@ async function renderUsage() {
     <section class="panel"><h3>Últimos 14 días</h3>
       ${u.days.length ? `<table><thead><tr><th>Día</th><th>Unidades</th><th>Búsquedas</th><th>Desde caché</th><th>Errores</th><th>¿Se agotó?</th></tr></thead><tbody>
       ${u.days.map((d) => `<tr><td>${esc(String(d.day).slice(0, 10))}</td><td>${d.units}</td><td>${d.searches}</td><td>${d.cacheHits}</td><td>${d.errors}</td><td>${d.exhaustedAt ? fecha(d.exhaustedAt) : 'No'}</td></tr>`).join('')}</tbody></table>` : '<p class="vacio">Sin consumo registrado.</p>'}</section>`);
+}
+
+// ───────── Repertorio (listas de YouTube importadas) ─────────
+async function renderRepertoire() {
+  const base = `/api/admin/venues/${route.venueId}/repertoire`;
+  const d = await api('GET', base);
+  mount(`<p class="migas"><a href="#/">Sedes y salas</a> / Repertorio</p>
+    <h1 class="titulo">Repertorio de YouTube</h1>
+    <p class="tenue">Listas de reproducción importadas. Los clientes buscan primero aquí <b>sin gastar cuota</b>; solo si no encuentran, pueden buscar en todo YouTube. Importar cuesta 1 unidad por cada 50 videos (una búsqueda normal cuesta 100).</p>
+    ${!d.youtube.available ? `<p class="aviso" style="margin-top:14px">${esc(d.youtube.reason)}</p>` : ''}
+    <section class="panel" style="margin-top:14px"><h3>${d.total} canciones en el repertorio · ${d.lists.length} listas</h3>
+      ${d.lists.length ? `<div class="tabla-scroll"><table><thead><tr><th>Lista</th><th>Canciones</th><th>Actualizada</th><th>Unidades gastadas</th><th></th></tr></thead><tbody>
+      ${d.lists.map((l) => `<tr><td>${esc(l.title || l.listId)}<br><span class="tenue">${esc(l.channel || '')}${l.venueId ? '' : ' · todas las sedes'}</span>${l.lastError ? `<br><span class="chapa demo">Error al refrescar</span> <span class="tenue">${esc(l.lastError)}</span>` : ''}</td>
+        <td>${l.count}</td><td>${fecha(l.refreshedAt)}</td><td>${l.units}</td>
+        <td class="acc"><button class="btn chico" data-ref="${l.id}">Refrescar</button> <button class="btn chico peligro" data-del="${l.id}">Quitar</button></td></tr>`).join('')}
+      </tbody></table></div><p class="ayuda" style="margin-top:8px">Se refrescan solas cada 25 días (YouTube exige renovar los datos antes de 30).</p>`
+    : '<p class="vacio">Aún no hay listas. Pega abajo el enlace de una lista de reproducción de YouTube.</p>'}
+    </section>
+    <h2 class="sub">Importar una lista</h2>
+    <form id="imp" class="panel"><div class="form-grid">
+      <label class="campo"><span>Enlace de la lista de reproducción</span><input name="url" required placeholder="https://www.youtube.com/playlist?list=PL…"></label>
+      ${user.role === 'admin_general' ? '<label class="casilla"><input type="checkbox" name="todas"><span>Disponible en todas las sedes</span></label>' : ''}
+    </div><p class="ayuda" style="margin-top:8px">La lista debe ser pública o «no listada». Las listas «Mix» de YouTube no se pueden importar. Máximo 3.000 videos por lista.</p>
+    <div class="fila-acc" style="margin-top:14px"><button class="btn principal">Importar</button><span id="imp-estado" class="tenue"></span></div></form>`);
+  $('#imp').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const btn = ev.target.querySelector('button'); btn.disabled = true; $('#imp-estado').textContent = 'Importando… puede tardar un minuto.';
+    const ok = await act(async () => {
+      const r = await api('POST', base, { url: ev.target.url.value, todas: ev.target.todas?.checked || false });
+      toast(`«${r.title}»: ${r.count} canciones importadas (${r.units} unidades)${r.truncated ? ' · se tomaron las primeras 3.000' : ''}`);
+    });
+    if (ok) renderRepertoire(); else { btn.disabled = false; $('#imp-estado').textContent = ''; }
+  };
+  app.querySelectorAll('[data-ref]').forEach((b) => { b.onclick = async () => { b.disabled = true; if (await act(() => api('POST', `${base}/${b.dataset.ref}/refresh`), 'Lista actualizada')) renderRepertoire(); else b.disabled = false; }; });
+  app.querySelectorAll('[data-del]').forEach((b) => { b.onclick = async () => { if (confirm('¿Quitar esta lista del repertorio?') && await act(() => api('DELETE', `${base}/${b.dataset.del}`), 'Lista quitada')) renderRepertoire(); }; });
 }
 
 // ───────── Catálogo autorizado ─────────

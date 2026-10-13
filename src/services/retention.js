@@ -1,6 +1,7 @@
 // Limpieza periódica: conservación limitada de datos personales y de caché de metadatos.
 import { q } from '../db.js';
 import { config } from '../config.js';
+import { refreshStale } from './repertorio.js';
 
 export async function runRetention() {
   const out = {};
@@ -15,6 +16,7 @@ export async function runRetention() {
   out.busquedas = (await q("DELETE FROM search_cache WHERE fetched_at < now() - interval '30 days'")).rowCount;
   await q('DELETE FROM admin_sessions WHERE expires_at < now()');
   await q('DELETE FROM pairing_codes WHERE expires_at < now()');
+  out.repertorio = await refreshStale().catch((e) => ({ error: e.message }));
   return out;
 }
 

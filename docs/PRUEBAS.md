@@ -6,7 +6,7 @@ Ejecutadas el 13 de octubre de 2026 con Node.js 22.22, PostgreSQL 16 y Chromium 
 
 | Conjunto | Resultado | Qué ejercita |
 |---|---|---|
-| `npm test` | **28 de 28** | API real por HTTP + PostgreSQL real: concurrencia, idempotencia, avance, permisos, límites, cuota |
+| `npm test` | **29 de 29** | API real por HTTP + PostgreSQL real: concurrencia, idempotencia, avance, permisos, límites, cuota |
 | `npm run e2e` | **17 de 17** | Navegadores reales: panel, televisor (1920×1080) y dos celulares emulados, con sonido y política de autoplay estricta |
 | Proveedor YouTube | Solo con red simulada | Ver «Lo que NO se probó» |
 | Revisión independiente del código | 12 hallazgos, todos corregidos | Autorización, fuga de datos, XSS, concurrencia, estabilidad, televisor |

@@ -216,7 +216,8 @@ function viewSearch() {
     $('#res').onclick = (e) => {
       const b = e.target.closest('button.pista');
       if (b) return confirmAdd(results.items.find((i) => i.mediaId === b.dataset.id));
-      if (e.target.id === 'mas') doSearch(results.query, results.nextPage);
+      if (e.target.id === 'mas') doSearch(results.query, results.nextPage, results.scope);
+      if (e.target.id === 'todo') doSearch(results.query, null, 'youtube');
     };
   }
   $('#cerrado').hidden = S.session.requestsOpen;
@@ -226,19 +227,22 @@ function viewSearch() {
       ${list && !searching ? (list.length
     ? `${results.query ? '' : '<p class="tenue" style="margin-top:14px">Para empezar, algunas que suenan aquí:</p>'}
          <ul class="lista">${list.map((i) => row(i, { action: true })).join('')}</ul>
-         ${results.nextPage ? '<button class="btn mas" id="mas">Ver más resultados</button>' : ''}`
-    : (results.query ? '<div class="vacio"><b>Nada con ese nombre</b>Prueba con el artista o con menos palabras.</div>'
+         ${results.nextPage ? '<button class="btn mas" id="mas">Ver más resultados</button>' : ''}
+         ${results.query && results.source === 'repertorio' && results.canExpand ? '<p class="tenue" style="margin-top:14px;font-size:.88rem">¿No está la que buscas?</p><button class="btn mas" id="todo">Buscar en todo YouTube</button>' : ''}`
+    : (results.query ? (results.source === 'repertorio' && results.canExpand
+      ? '<div class="vacio"><b>No está en el repertorio del bar</b>Puedes buscarla en todo YouTube.<p style="margin-top:16px"><button class="btn principal" id="todo">Buscar en todo YouTube</button></p></div>'
+      : '<div class="vacio"><b>Nada con ese nombre</b>Prueba con el artista o con menos palabras.</div>')
       : '<div class="vacio"><b>Busca tu canción</b>Escribe al menos 3 letras del nombre o del artista.</div>')) : ''}`;
   if ($('#res').dataset.html !== html) { $('#res').innerHTML = html; $('#res').dataset.html = html; }
 }
 
-async function doSearch(text, page) {
+async function doSearch(text, page, scope = 'repertorio') {
   const seq = ++searchSeq;
   searching = !page; searchMsg = ''; render();
   try {
-    const d = await api('GET', `${base}/search?q=${encodeURIComponent(text)}${page ? `&page=${encodeURIComponent(page)}` : ''}`);
+    const d = await api('GET', `${base}/search?q=${encodeURIComponent(text)}${page ? `&page=${encodeURIComponent(page)}` : ''}${scope === 'youtube' ? '&scope=youtube' : ''}`);
     if (seq !== searchSeq) return; // llegó tarde: ya hay otra búsqueda
-    results = { items: page ? [...results.items, ...d.items] : d.items, nextPage: d.nextPage, query: text };
+    results = { items: page ? [...results.items, ...d.items] : d.items, nextPage: d.nextPage, query: text, source: d.source, canExpand: d.canExpand, scope };
   } catch (e) {
     if (seq !== searchSeq) return;
     searchMsg = e.message;
@@ -272,7 +276,7 @@ function viewMine() {
   $('#vista').innerHTML = mine.length
     ? `<ul class="lista">${mine.map((r) => `<li><div class="pista">
         ${r.position ? `<span class="puesto">#${r.position}</span>` : thumb(r)}
-        <span><span class="titulo">${esc(r.title)}</span><span class="estado ${r.status}">${ESTADOS[r.status]}</span></span>
+        <span><span class="titulo">${esc(r.title)}</span><span class="estado ${r.status}">${ESTADOS[r.status]}${r.status === 'fallida' && /yt-(101|150)/.test(r.failReason || '') ? ': el dueño del video no permite reproducirlo aquí. Busca otra versión.' : ''}</span></span>
         <span class="lado">${['pendiente', 'por_aprobar'].includes(r.status) ? `<button class="btn chico" data-quitar="${r.id}">Retirar</button>` : ''}</span></div></li>`).join('')}</ul>
        <p class="tenue" style="margin-top:12px;font-size:.88rem">Puedes tener hasta ${S.session.maxPending} canciones en espera.</p>`
     : `<div class="vacio"><b>Aún no has pedido nada</b>Busca una canción y agrégala a la fila.

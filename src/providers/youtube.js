@@ -6,6 +6,7 @@
 import { q } from '../db.js';
 import { config } from '../config.js';
 import { AppError } from '../lib/util.js';
+import { searchRepertoire, findInRepertoire } from '../services/repertorio.js';
 
 const API = 'https://www.googleapis.com/youtube/v3';
 const COST = { search: 100, videos: 1 };
@@ -82,7 +83,7 @@ function toItem(v) {
   };
 }
 
-async function fetchVideos(ids) {
+export async function fetchVideos(ids) {
   if (!ids.length) return [];
   const data = await call('videos', { part: 'snippet,contentDetails,status', id: ids.join(','), maxResults: '50' }, COST.videos);
   const items = (data.items || []).map(toItem);
@@ -111,12 +112,34 @@ export const youtube = {
     return { available: true };
   },
 
+  /** Título y canal de una lista de reproducción (1 unidad). */
+  async playlistInfo(listId) {
+    const data = await call('playlists', { part: 'snippet,contentDetails', id: listId, maxResults: '1' }, 1);
+    const p = data.items?.[0];
+    if (!p) return null;
+    return { title: p.snippet?.title || listId, channel: p.snippet?.channelTitle || '', count: p.contentDetails?.itemCount ?? 0 };
+  },
+
+  /** Una página (hasta 50) de identificadores de video de una lista (1 unidad). */
+  async playlistPage(listId, pageToken = '') {
+    const data = await call('playlistItems', { part: 'contentDetails', playlistId: listId, maxResults: '50', ...(pageToken ? { pageToken } : {}) }, 1);
+    return { ids: (data.items || []).map((i) => i.contentDetails?.videoId).filter(Boolean), next: data.nextPageToken || null };
+  },
+
+  /** Detalles de hasta 50 videos (1 unidad). */
+  fetchVideos,
+
   async usageToday() {
     const u = await usage();
     return { ...u, day: quotaDay(), dailyQuota: config.youtube.dailyQuota, searchCost: COST.search };
   },
 
-  async search(query, { page = '' } = {}) {
+  async search(query, { page = '', venueId = null, scope = 'repertorio' } = {}) {
+    if (scope !== 'youtube') {
+      // Repertorio del bar: listas importadas, búsqueda local, cero unidades de cuota.
+      const items = await searchRepertoire(query, { venueId });
+      return { items, nextPage: null, fromCache: true, source: 'repertorio', canExpand: this.isConfigured() };
+    }
     const st = await this.status();
     if (!st.available) throw new AppError(503, 'proveedor_no_disponible', st.reason);
     const key = query.toLowerCase();
@@ -126,7 +149,7 @@ export const youtube = {
          AND fetched_at > now() - make_interval(hours => $3)`, [key, page, config.youtube.searchCacheHours]);
     if (cached.rowCount) {
       await addUsage({ cache_hits: 1 });
-      return { ...cached.rows[0].data, fromCache: true };
+      return { ...cached.rows[0].data, fromCache: true, source: 'youtube' };
     }
 
     const u = await usage();
@@ -134,7 +157,7 @@ export const youtube = {
     if (u.exhausted_at || u.units + COST.search + COST.videos > budget) throw quotaError();
 
     const data = await call('search', {
-      part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '10',
+      part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '25',
       q: query, regionCode: config.youtube.regionCode, safeSearch: 'moderate',
       ...(page ? { pageToken: page } : {}),
     }, COST.search);
@@ -145,12 +168,14 @@ export const youtube = {
     const result = { items: ids.map((id) => byId.get(id)).filter(Boolean), nextPage: data.nextPageToken || null };
     await q(`INSERT INTO search_cache(provider, query, page, data) VALUES ('youtube',$1,$2,$3)
              ON CONFLICT (provider, query, page) DO UPDATE SET data = EXCLUDED.data, fetched_at = now()`, [key, page, result]);
-    return { ...result, fromCache: false };
+    return { ...result, fromCache: false, source: 'youtube' };
   },
 
   /** Validación en el servidor antes de aceptar una solicitud (1 unidad si no está en caché reciente). */
-  async getMedia(mediaId) {
+  async getMedia(mediaId, { venueId = null } = {}) {
     if (!/^[A-Za-z0-9_-]{11}$/.test(mediaId)) return null;
+    const known = await findInRepertoire(mediaId, { venueId });
+    if (known) return known; // ya validado al importar la lista: 0 unidades
     const st = await this.status();
     if (!st.available) throw new AppError(503, 'proveedor_no_disponible', st.reason);
     const cached = await q(

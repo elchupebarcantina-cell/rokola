@@ -30,7 +30,8 @@ La fila va en orden de llegada. Cuando nadie ha pedido nada suena la lista de la
 
 - **«No me deja pedir más»**: hay un máximo de canciones en espera por persona. Cuando suene una, puede pedir otra.
 - **«Me dice que ya está en la fila»**: alguien la pidió antes. Ya va a sonar.
-- **«Mi canción no aparece»**: que busque por el nombre del artista. Si sale en gris, no está permitida (muy larga, en vivo o bloqueada).
+- **«Mi canción no aparece»**: que busque por el nombre del artista. Si no está en el repertorio del bar, puede pulsar «Buscar en todo YouTube». Si sale en gris, no está permitida (muy larga, en vivo o bloqueada).
+- **«Dice que el dueño del video no permite reproducirlo»**: ese video en particular bloquea la reproducción fuera de YouTube. Que pida otra versión de la misma canción.
 - **«¿Cuánto falta?»**: su pantalla le muestra el puesto y un tiempo aproximado.
 - **«Me pide un código»**: son los 4 dígitos que salen en el televisor, debajo del QR.
 

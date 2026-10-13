@@ -31,6 +31,12 @@ function mockOk() {
     const u = new URL(url);
     calls.push(u.pathname.split('/').pop());
     assert.equal(u.searchParams.get('key'), 'clave-de-prueba');
+    if (u.pathname.endsWith('/playlists')) {
+      return u.searchParams.get('id') === 'PLbar123456' ? json(200, { items: [{ snippet: { title: 'Vallenato del bar', channelTitle: 'El Chupe' }, contentDetails: { itemCount: 3 } }] }) : json(200, { items: [] });
+    }
+    if (u.pathname.endsWith('/playlistItems')) {
+      return json(200, { items: [IDS[0], IDS[1], IDS[3]].map((id) => ({ contentDetails: { videoId: id } })) });
+    }
     if (u.pathname.endsWith('/search')) {
       assert.equal(u.searchParams.get('type'), 'video');
       assert.equal(u.searchParams.get('videoEmbeddable'), 'true');
@@ -76,7 +82,7 @@ test('duraciones ISO 8601 y día de cuota (hora del Pacífico)', () => {
 
 test('búsqueda: resultados anotados, caché y contabilidad de cuota', async () => {
   const { g, token } = await night();
-  const r = await g.get(`/api/s/${token}/search?q=${encodeURIComponent('carlos vives')}`);
+  const r = await g.get(`/api/s/${token}/search?q=${encodeURIComponent('carlos vives')}&scope=youtube`);
   assert.equal(r.status, 200);
   assert.equal(r.body.nextPage, 'PAG2');
   const by = Object.fromEntries(r.body.items.map((i) => [i.mediaId, i]));
@@ -92,7 +98,7 @@ test('búsqueda: resultados anotados, caché y contabilidad de cuota', async () 
   assert.ok(!JSON.stringify(r.body).includes('clave-de-prueba'), 'la clave jamás llega al cliente');
 
   // Misma consulta (aunque cambien mayúsculas): sale de caché, cero llamadas nuevas.
-  await g.get(`/api/s/${token}/search?q=${encodeURIComponent('Carlos Vives')}`);
+  await g.get(`/api/s/${token}/search?q=${encodeURIComponent('Carlos Vives')}&scope=youtube`);
   assert.deepEqual(calls, ['search', 'videos']);
   const u = (await admin.get('/api/admin/usage')).body.today;
   assert.equal(u.units, 101, '100 de search.list + 1 de videos.list');
@@ -100,7 +106,7 @@ test('búsqueda: resultados anotados, caché y contabilidad de cuota', async () 
   assert.equal(u.cache_hits, 1);
 
   // Consultas cortas no llegan a la API.
-  assert.equal((await g.get(`/api/s/${token}/search?q=ab`)).status, 422);
+  assert.equal((await g.get(`/api/s/${token}/search?q=ab&scope=youtube`)).status, 422);
   assert.equal(calls.length, 2);
 });
 
@@ -122,19 +128,19 @@ test('una solicitud de YouTube se valida en el servidor antes de entrar a la fil
 test('14 · cuota agotada: mensaje claro y la fila no se borra', async () => {
   const { g, token, tv } = await night();
   await g.add(IDS[0], crypto.randomUUID(), 'youtube');
-  await g.get(`/api/s/${token}/search?q=primera`); // cachea metadatos
+  await g.get(`/api/s/${token}/search?q=primera&scope=youtube`); // cachea metadatos
   const antes = (await tv.get('/api/tv/state')).body;
 
   mockQuotaExceeded();
   calls = [];
-  const r = await g.get(`/api/s/${token}/search?q=segunda`);
+  const r = await g.get(`/api/s/${token}/search?q=segunda&scope=youtube`);
   assert.equal(r.status, 503);
   assert.equal(r.body.error, 'cuota_agotada');
   assert.match(r.body.message, /límite/);
   assert.match(r.body.message, /fila sigue funcionando/);
 
   // Ya marcada como agotada: no se vuelve a llamar a YouTube en lo que queda del día.
-  const r2 = await g.get(`/api/s/${token}/search?q=tercera`);
+  const r2 = await g.get(`/api/s/${token}/search?q=tercera&scope=youtube`);
   assert.equal(r2.body.error, 'cuota_agotada');
   assert.deepEqual(calls, ['search']);
 
@@ -144,7 +150,7 @@ test('14 · cuota agotada: mensaje claro y la fila no se borra', async () => {
   assert.equal((await tv.post('/api/tv/ended', { tabId: tv.tabId, requestId: antes.now.id })).body.changed, true);
 
   // Lo ya buscado sigue disponible desde caché, y hay sugerencias sin gastar cuota.
-  assert.equal((await g.get(`/api/s/${token}/search?q=primera`)).status, 200);
+  assert.equal((await g.get(`/api/s/${token}/search?q=primera&scope=youtube`)).status, 200);
   const sug = await g.get(`/api/s/${token}/sugeridas`);
   assert.equal(sug.status, 200);
   assert.ok(sug.body.items.some((i) => i.mediaId === IDS[0]), 'lo que ya sonó se puede volver a elegir');
@@ -160,7 +166,7 @@ test('14 · cuota agotada: mensaje claro y la fila no se borra', async () => {
 test('presupuesto propio: las búsquedas se frenan antes de tocar la reserva para validar videos', async () => {
   const { g, token } = await night();
   await q("INSERT INTO api_usage(day, provider, units) VALUES ($1,'youtube', 9450)", [quotaDay()]);
-  const r = await g.get(`/api/s/${token}/search?q=reserva`);
+  const r = await g.get(`/api/s/${token}/search?q=reserva&scope=youtube`);
   assert.equal(r.body.error, 'cuota_agotada');
   assert.deepEqual(calls, [], 'ni siquiera se llamó a la API');
   assert.equal((await g.add(IDS[0], crypto.randomUUID(), 'youtube')).status, 201, 'validar un video (1 unidad) aún es posible');
@@ -175,4 +181,41 @@ test('YouTube deshabilitado: no se puede asignar a una sala', async () => {
     assert.equal(r.status, 409);
     assert.match(r.body.message, /autorización de uso comercial/);
   } finally { config.youtube.enabled = true; }
+});
+
+test('repertorio: importar una lista cuesta 1 unidad por página y la búsqueda local no gasta', async () => {
+  const { g, token } = await night();
+  const r = await admin.post(`/api/admin/venues/${A.venue_id}/repertoire`, { url: 'https://www.youtube.com/playlist?list=PLbar123456' });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.count, 3);
+  assert.equal(r.body.units, 3, 'playlists.list + playlistItems.list + videos.list = 3 unidades');
+  assert.deepEqual(calls, ['playlists', 'playlistItems', 'videos']);
+
+  calls = [];
+  const s = await g.get(`/api/s/${token}/search?q=video`);
+  assert.equal(s.body.source, 'repertorio');
+  assert.equal(s.body.canExpand, true);
+  assert.deepEqual(s.body.items.map((i) => i.mediaId).sort(), [IDS[0], IDS[1], IDS[3]].sort());
+  assert.equal(s.body.items.find((i) => i.mediaId === IDS[3]).available, false, 'lo no integrable se marca igual');
+  assert.deepEqual(calls, [], 'cero llamadas a la API');
+
+  // Pedir algo del repertorio tampoco gasta (ya está validado).
+  assert.equal((await g.add(IDS[0], crypto.randomUUID(), 'youtube')).status, 201);
+  assert.deepEqual(calls, []);
+
+  // "Buscar en todo YouTube" sí gasta.
+  await g.get(`/api/s/${token}/search?q=otra cosa&scope=youtube`);
+  assert.deepEqual(calls, ['search', 'videos']);
+
+  // Listas inválidas o "Mix" se rechazan sin gastar.
+  assert.equal((await admin.post(`/api/admin/venues/${A.venue_id}/repertoire`, { url: 'https://www.youtube.com/watch?v=abc&list=RDabcdefghij' })).body.error, 'lista_invalida');
+  assert.equal((await admin.post(`/api/admin/venues/${A.venue_id}/repertoire`, { url: 'PLnoexiste1234' })).status, 404);
+
+  // El listado y el borrado respetan la sede.
+  const lists = (await admin.get(`/api/admin/venues/${A.venue_id}/repertoire`)).body;
+  assert.equal(lists.total, 3);
+  const otro = (await admin.get(`/api/admin/venues/${A.venue_id + 1}/repertoire`)).body;
+  assert.equal(otro.total ?? 0, 0, 'la lista de la sede A no se ve en la sede B');
+  assert.equal((await admin.del(`/api/admin/venues/${A.venue_id}/repertoire/${lists.lists[0].id}`)).status, 200);
+  assert.equal((await g.get(`/api/s/${token}/search?q=video`)).body.items.length, 0);
 });

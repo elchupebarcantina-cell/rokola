@@ -134,8 +134,10 @@ publicRouter.get('/:token/search', wrap(async (req, res) => {
   const page = cleanText(req.query.page, 120);
   const provider = getProvider(session.provider);
   try {
-    const out = await provider.search(query, { page, venueId: session.venue_id });
-    res.json({ provider: provider.id, items: annotate(out.items, mergeSettings(session.settings), await blockedSet(session.venue_id)), nextPage: out.nextPage });
+    const scope = req.query.scope === 'youtube' ? 'youtube' : 'repertorio';
+    const out = await provider.search(query, { page, venueId: session.venue_id, scope });
+    res.json({ provider: provider.id, items: annotate(out.items, mergeSettings(session.settings), await blockedSet(session.venue_id)),
+      nextPage: out.nextPage, source: out.source || provider.id, canExpand: Boolean(out.canExpand) });
   } catch (e) {
     if (e.code === 'cuota_agotada' || e.code === 'proveedor_no_disponible') {
       await logError({ roomId: session.room_id, sessionId: session.id, kind: `busqueda.${e.code}`, message: e.message });

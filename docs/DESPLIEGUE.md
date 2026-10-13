@@ -58,6 +58,12 @@ Antes de este paso lee [LEGAL-Y-COSTOS.md](LEGAL-Y-COSTOS.md): tener clave no au
 - **Más cuota no se compra.** Se solicita con el formulario de auditoría de cumplimiento de YouTube API Services, describiendo el caso de uso; YouTube revisa la aplicación y decide. La cuota concedida solo puede usarse para el caso aprobado. Formulario: <https://support.google.com/youtube/contact/yt_api_form>
 - El consumo del día y los últimos 14 días se ven en **Panel → Consumo de API**.
 
+### Repertorio: buscar sin gastar cuota
+
+Leer una lista de reproducción cuesta **1 unidad por cada 50 videos** (una búsqueda cuesta 100). Por eso el sistema trae un **Repertorio** por sede (**Panel → Sedes y salas → Repertorio**): se pegan enlaces de listas de YouTube (públicas o «no listadas»; las «Mix» no sirven), se importan sus títulos, duraciones y disponibilidad, y la búsqueda de los clientes consulta primero ahí, a costo cero. Solo si no encuentran, aparece «Buscar en todo YouTube», que sí gasta 100 unidades. Pedir una canción del repertorio tampoco gasta: ya quedó validada al importar.
+
+Las listas se refrescan solas cada 25 días (la política de YouTube exige renovar o borrar los metadatos antes de 30). Con 300–500 canciones por sede se cubre la mayor parte de lo que se pide en una noche; el consumo de cada importación se muestra en la misma pantalla.
+
 ## 4. Agregar contenido al catálogo autorizado
 
 **Panel → Sedes y salas → Catálogo autorizado → Agregar contenido.** Cada ítem es un título, una URL https a un archivo `mp4`, `webm` o `mp3`, su duración y el origen del derecho de uso. El archivo debe estar en un alojamiento que permita reproducirlo desde el dominio de la rockola (por ejemplo un bucket con acceso público de lectura). El sistema no sube ni almacena archivos.

@@ -13,6 +13,7 @@ import { closeSession, openSession, regenerateDoorCode, setRequestsOpen } from '
 import { adminApprove, adminMove, adminRemove, adminSkip, blockedSet, mediaRejection } from '../services/queue.js';
 import { clearAttention, finishCurrent, setDesired } from '../services/playback.js';
 import { adminSnapshot } from '../services/snapshot.js';
+import { importList, parsePlaylistId } from '../services/repertorio.js';
 
 export const adminRouter = Router();
 const baseUrl = (req) => `${req.protocol}://${req.get('host')}`;
@@ -257,8 +258,9 @@ adminRouter.get('/rooms/:roomId/search', wrap(async (req, res) => {
   const query = cleanText(req.query.q, 80);
   const provider = getProvider(room.provider);
   if (query.length < 3 && provider.id !== 'catalogo') fail(422, 'consulta_corta', 'Escribe al menos 3 letras.');
-  const out = await provider.search(query, { venueId: room.venue_id });
-  res.json({ items: out.items.map(({ playUrl, ...i }) => i) });
+  const scope = req.query.scope === 'youtube' ? 'youtube' : 'repertorio';
+  const out = await provider.search(query, { venueId: room.venue_id, scope });
+  res.json({ items: out.items.map(({ playUrl, ...i }) => i), source: out.source || provider.id, canExpand: Boolean(out.canExpand) });
 }));
 
 // Lista de respaldo
@@ -422,5 +424,48 @@ adminRouter.delete('/venues/:venueId/catalog/:id', wrap(async (req, res) => {
   const { rowCount } = await q('UPDATE catalog_items SET active = false WHERE id = $1 AND venue_id = $2', [intParam(req.params.id), venueId]);
   if (!rowCount) fail(404, 'no_encontrado', 'Solo puedes retirar contenido de tu sede.');
   await audit({ query: q }, { venueId, actor: req.actor, action: 'catalogo.retirar', detail: { id: req.params.id } });
+  res.json({ ok: true });
+}));
+
+// ───────── Repertorio (listas de YouTube importadas: búsqueda sin gastar cuota) ─────────
+function repertoireScope(req) {
+  const venueId = intParam(req.params.venueId);
+  assertVenue(req.user, venueId, 'admin_sede');
+  return venueId;
+}
+
+adminRouter.get('/venues/:venueId/repertoire', wrap(async (req, res) => {
+  const venueId = repertoireScope(req);
+  const { rows } = await q(
+    `SELECT id, venue_id AS "venueId", list_id AS "listId", title, channel, item_count AS count, units_spent AS units, last_error AS "lastError",
+            created_at AS "createdAt", refreshed_at AS "refreshedAt"
+       FROM repertoire_lists WHERE venue_id = $1 OR venue_id IS NULL ORDER BY title`, [venueId]);
+  const total = (await q(
+    `SELECT count(DISTINCT i.media_id)::int AS n FROM repertoire_items i JOIN repertoire_lists l ON l.id = i.list_id WHERE l.venue_id = $1 OR l.venue_id IS NULL`, [venueId])).rows[0].n;
+  res.json({ lists: rows, total, youtube: await youtube.status() });
+}));
+
+adminRouter.post('/venues/:venueId/repertoire', wrap(async (req, res) => {
+  const venueId = repertoireScope(req);
+  rateLimit(`import:${req.user.id}`, 20, 600);
+  const listId = parsePlaylistId(req.body.url);
+  const shared = req.body.todas === true && req.user.role === 'admin_general'; // disponible en todas las sedes
+  const out = await importList({ venueId: shared ? null : venueId, listId, userId: req.user.id });
+  res.status(201).json(out);
+}));
+
+adminRouter.post('/venues/:venueId/repertoire/:id/refresh', wrap(async (req, res) => {
+  const venueId = repertoireScope(req);
+  rateLimit(`import:${req.user.id}`, 20, 600);
+  const { rows } = await q('SELECT * FROM repertoire_lists WHERE id = $1 AND (venue_id = $2 OR (venue_id IS NULL AND $3))', [intParam(req.params.id), venueId, req.user.role === 'admin_general']);
+  if (!rows[0]) fail(404, 'no_encontrado', 'Lista no encontrada.');
+  res.json(await importList({ listRowId: rows[0].id, venueId: rows[0].venue_id, listId: rows[0].list_id, userId: req.user.id }));
+}));
+
+adminRouter.delete('/venues/:venueId/repertoire/:id', wrap(async (req, res) => {
+  const venueId = repertoireScope(req);
+  const { rowCount } = await q('DELETE FROM repertoire_lists WHERE id = $1 AND (venue_id = $2 OR (venue_id IS NULL AND $3))', [intParam(req.params.id), venueId, req.user.role === 'admin_general']);
+  if (!rowCount) fail(404, 'no_encontrado', 'Lista no encontrada.');
+  await audit({ query: q }, { venueId, actor: req.actor, action: 'repertorio.quitar', detail: { id: req.params.id } });
   res.json({ ok: true });
 }));

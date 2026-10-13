@@ -10,7 +10,7 @@ Videorrockola colaborativa para bares: el cliente escanea un QR, busca una canci
 
 ## Estado real del proyecto
 
-- **Probado de punta a punta** con el catálogo autorizado en modo DEMO (pistas generadas por el propio sistema): 28 pruebas automáticas contra PostgreSQL real y 17 pasos en navegadores reales. Detalle en [docs/PRUEBAS.md](docs/PRUEBAS.md).
+- **Probado de punta a punta** con el catálogo autorizado en modo DEMO (pistas generadas por el propio sistema): 29 pruebas automáticas contra PostgreSQL real y 17 pasos en navegadores reales. Detalle en [docs/PRUEBAS.md](docs/PRUEBAS.md).
 - **YouTube está implementado pero no probado con el servicio real** (no había credenciales ni acceso a YouTube en el entorno de desarrollo) y **viene apagado**. No debe encenderse en un bar sin el permiso escrito de YouTube. Ver [docs/LEGAL-Y-COSTOS.md](docs/LEGAL-Y-COSTOS.md).
 - Lo que falta para operar legalmente está en la lista de [autorizaciones pendientes](docs/LEGAL-Y-COSTOS.md#autorizaciones-pendientes).
 
@@ -27,6 +27,7 @@ Panel     ──HTTPS──┘        │   ▲                 │
 - **Node.js 22 + Express + PostgreSQL**, sin paso de compilación. Es el mismo stack y el mismo despliegue (Railway) del POS de El Chupe, y la rockola necesita conexiones abiertas permanentes para el tiempo real, que en un servidor Node tradicional salen directas. Por eso no se usó Next.js.
 - **Tiempo real**: Server-Sent Events hacia los navegadores y `LISTEN/NOTIFY` de PostgreSQL por dentro. Si el canal se cae, cada pantalla además consulta cada 10–15 s.
 - **La fila la ordena el servidor**. Toda operación sobre la fila de una sala pasa por un candado transaccional de esa sala (`withRoomLock` en `src/db.js`); el turno (`seq`) se asigna ahí. La base tiene además índices únicos que hacen imposible, aunque el código fallara, tener dos canciones sonando a la vez en una sesión, dos sesiones abiertas en una sala o dos solicitudes con el mismo turno.
+- **Repertorio**: listas de YouTube importadas a 1 unidad por cada 50 videos; la búsqueda de los clientes consulta primero ahí sin gastar cuota (`src/services/repertorio.js`).
 - **Proveedores intercambiables** (`src/providers/`): cada proveedor implementa `search`, `getMedia` y `status`, y tiene su adaptador de reproducción en `public/tv/players.js`. Agregar un catálogo comercial es crear esos dos archivos; nada más cambia.
 
 ```
@@ -66,7 +67,7 @@ Para probar con celulares en la misma red, usa la IP del computador (`http://192
 |---|---|
 | `npm start` | Arranca el servidor (aplica migraciones pendientes) |
 | `npm run seed` | Crea administrador, sedes y catálogo DEMO |
-| `npm test` | 28 pruebas automáticas (necesita una base de pruebas: `TEST_DATABASE_URL`) |
+| `npm test` | 29 pruebas automáticas (necesita una base de pruebas: `TEST_DATABASE_URL`) |
 | `npm run e2e` | Prueba en navegadores reales contra un servidor en marcha |
 | `npm run respaldo` | Copia de seguridad con `pg_dump` |
 
