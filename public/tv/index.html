@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Rockola · Pantalla</title>
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/tv/tv.css">
+</head>
+<body>
+<!-- La pantalla completa se aplica a TODA la aplicación (video + QR), no solo al reproductor. -->
+<div id="tv" class="tv">
+  <section class="escenario">
+    <!-- Nada de la aplicación se dibuja encima de esta zona mientras suena un video de YouTube. -->
+    <div class="marco-video">
+      <div id="yt-host" class="capa" hidden></div>
+      <div id="cat-host" class="capa" hidden></div>
+      <div id="reposo" class="capa reposo"></div>
+    </div>
+    <footer class="barra" id="barra"></footer>
+  </section>
+  <aside class="lateral" id="lateral"></aside>
+</div>
+<script type="module" src="/tv/tv.js"></script>
+</body>
+</html>

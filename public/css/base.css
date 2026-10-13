@@ -1,0 +1,69 @@
+/* Tipografías servidas por la propia aplicación (licencia SIL Open Font): no dependen de internet externo. */
+@font-face { font-family: 'Alfa Slab One'; src: url('/fonts/alfa-slab-one-latin-400-normal.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Rye'; src: url('/fonts/rye-latin-400-normal.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Jost'; font-weight: 400; src: url('/fonts/jost-latin-400-normal.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Jost'; font-weight: 500 600; src: url('/fonts/jost-latin-600-normal.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Jost'; font-weight: 700; src: url('/fonts/jost-latin-700-normal.woff2') format('woff2'); font-display: swap; }
+/* Identidad El Chupe: negro profundo, crema y dorado envejecido. Etiqueta de licor vintage. */
+:root {
+  --negro: #0a0908;
+  --tinta: #16130e;
+  --tinta-2: #211c14;
+  --linea: #3a3122;
+  --crema: #efe3c8;
+  --crema-2: #b9ad92;
+  --oro: #b08d3e;
+  --oro-claro: #d6b56a;
+  --rojo: #d9614a;
+  --verde: #8fb46a;
+  --display: 'Alfa Slab One', 'Rockwell', Georgia, serif;
+  --label: 'Rye', 'Alfa Slab One', Georgia, serif;
+  --texto: 'Jost', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--negro); color: var(--crema); font-family: var(--texto); }
+body { min-height: 100dvh; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; letter-spacing: .01em; }
+p { margin: 0; }
+a { color: var(--oro-claro); }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--oro-claro); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5em;
+  min-height: 48px; padding: 0 1.2em; border-radius: 6px; border: 1.5px solid var(--oro);
+  background: transparent; color: var(--crema); font-weight: 600; text-decoration: none;
+}
+.btn:hover { background: var(--tinta-2); }
+.btn.principal { background: var(--oro); color: var(--negro); border-color: var(--oro); }
+.btn.principal:hover { background: var(--oro-claro); }
+.btn.peligro { border-color: var(--rojo); color: var(--rojo); }
+.btn.chico { min-height: 36px; padding: 0 .8em; font-size: .9rem; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.campo { display: grid; gap: 6px; align-content: start; }
+.campo > span { font-size: .92rem; color: var(--crema-2); }
+.campo input, .campo select, input.entrada {
+  min-height: 48px; padding: 0 14px; border-radius: 6px; border: 1.5px solid var(--linea);
+  background: var(--tinta); color: var(--crema); width: 100%;
+}
+.campo input:focus, input.entrada:focus { border-color: var(--oro); outline: none; }
+
+/* Marco doble de etiqueta: el gesto propio de la marca. Se usa con moderación. */
+.etiqueta {
+  border: 2px solid var(--oro); border-radius: 4px; padding: 5px; background: var(--negro);
+}
+.etiqueta > .dentro { border: 1px solid var(--oro); border-radius: 2px; }
+.rombos { display: flex; align-items: center; gap: 10px; color: var(--oro); font-size: .7em; }
+.rombos::before, .rombos::after { content: ''; flex: 1; border-top: 1px dotted var(--oro); }
+
+.aviso { padding: 12px 14px; border-radius: 6px; border: 1.5px solid var(--linea); background: var(--tinta); }
+.aviso.error { border-color: var(--rojo); }
+.aviso.ok { border-color: var(--verde); }
+.tenue { color: var(--crema-2); }
+.chapa { display: inline-block; padding: 1px 8px; border-radius: 3px; border: 1px solid var(--oro); color: var(--oro-claro); font-size: .78rem; font-weight: 600; }
+.chapa.demo { border-color: var(--rojo); color: var(--rojo); }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
